@@ -208,6 +208,9 @@ def benchmark_parser():
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS, help='Number of timed iterations')
     parser.add_argument("--warmups", type=int, default=DEFAULT_WARMUPS, help='Number of warmup (non-timed) iterations')
     parser.add_argument("--maxsize", type=int, default=24, help='Max message size as a power of 2')
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--scan", action="store_true", help='Enables scanning all message sizes')
+    group.add_argument("--single", action="store_true", help='Run only 2^maxsize, mutual exclusive with --scan')
     parser.add_argument("--async-op", action="store_true", help='Enables non-blocking communication')
     parser.add_argument("--bw-unit", type=str, default=DEFAULT_UNIT, choices=['Gbps', 'GBps'])
     parser.add_argument("--backend",
@@ -220,7 +223,6 @@ def benchmark_parser():
                         default=DEFAULT_DIST,
                         choices=['deepspeed', 'torch'],
                         help='Distributed DL framework to use')
-    parser.add_argument("--scan", action="store_true", help='Enables scanning all message sizes')
     parser.add_argument("--raw", action="store_true", help='Print the message size and latency without units')
     parser.add_argument("--all-reduce", action="store_true", help='Run all_reduce')
     parser.add_argument("--reduce-scatter", action="store_true", help='Run reduce_scatter')

@@ -60,7 +60,39 @@ def run_all_reduce(local_rank, args):
     start_event = torch.cuda.Event(enable_timing=True)
     end_event = torch.cuda.Event(enable_timing=True)
 
-    if args.scan:
+    if args.single:
+        sync_all()
+        M = 2 ** (args.maxsize-1)
+        try:
+            mat = torch.ones(world_size, M,
+                             dtype=getattr(torch, args.dtype)).cuda(local_rank)
+            sync_all()
+            input = ((mat.mul_(float(global_rank))).view(-1))
+            del mat
+            torch.cuda.empty_cache()
+        except RuntimeError as e:
+            if 'out of memory' in str(e):
+                if dist.get_rank() == 0:
+                    print('WARNING: Ran out of GPU memory. Exiting comm op.')
+                sync_all()
+                return
+            else:
+                raise e
+        sync_all()
+        if args.validate:
+            passes = 0
+            for _ in range(args.trials):
+                if validate_allreduce(input.clone(), args):
+                    passes += 1
+            size = input.element_size() * input.nelement()
+            if not args.raw:
+                size = convert_size(size)
+            desc = f"validation ({passes}/{args.trials})"
+            print_rank_0(f"{size:<20} {desc:25s} {'PASS' if passes == args.trials else 'FAIL'}")
+        else:
+            timed_all_reduce(input, start_event, end_event, args)
+
+    elif args.scan:
         M_LIST = []
         for x in (2**p for p in range(1, args.maxsize)):
             M_LIST.append(x)
@@ -86,11 +118,15 @@ def run_all_reduce(local_rank, args):
                     raise e
             sync_all()
             if args.validate:
-                ok = validate_allreduce(input.clone(), args)
+                passes = 0
+                for _ in range(args.trials):
+                    if validate_allreduce(input.clone(), args):
+                        passes += 1
                 size = input.element_size() * input.nelement()
                 if not args.raw:
                     size = convert_size(size)
-                print_rank_0(f"{size:<20} {'validation':25s} {'PASS' if ok else 'FAIL'}")
+                desc = f"validation ({passes}/{args.trials})"
+                print_rank_0(f"{size:<20} {desc:25s} {'PASS' if passes == args.trials else 'FAIL'}")
             else:
                 timed_all_reduce(input, start_event, end_event, args)
     else:
@@ -115,11 +151,15 @@ def run_all_reduce(local_rank, args):
                 raise e
         sync_all()
         if args.validate:
-            ok = validate_allreduce(input.clone(), args)
+            passes = 0
+            for _ in range(args.trials):
+                if validate_allreduce(input.clone(), args):
+                    passes += 1
             size = input.element_size() * input.nelement()
             if not args.raw:
                 size = convert_size(size)
-            print_rank_0(f"{size:<20} {'validation':25s} {'PASS' if ok else 'FAIL'}")
+            desc = f"validation ({passes}/{args.trials})"
+            print_rank_0(f"{size:<20} {desc:25s} {'PASS' if passes == args.trials else 'FAIL'}")
         else:
             timed_all_reduce(input, start_event, end_event, args)
 
