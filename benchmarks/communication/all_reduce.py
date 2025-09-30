@@ -50,8 +50,9 @@ def run_all_reduce(local_rank, args):
     elif args.dist == 'deepspeed':
         import deepspeed.comm as dist
 
-    # Prepare benchmark header
-    print_header(args, 'all_reduce')
+    # Prepare benchmark header unless validating
+    if not args.validate:
+        print_header(args, 'all_reduce')
 
     world_size = dist.get_world_size()
     global_rank = dist.get_rank()
@@ -84,7 +85,14 @@ def run_all_reduce(local_rank, args):
                 else:
                     raise e
             sync_all()
-            timed_all_reduce(input, start_event, end_event, args)
+            if args.validate:
+                ok = validate_allreduce(input.clone(), args)
+                size = input.element_size() * input.nelement()
+                if not args.raw:
+                    size = convert_size(size)
+                print_rank_0(f"{size:<20} {'validation':25s} {'PASS' if ok else 'FAIL'}")
+            else:
+                timed_all_reduce(input, start_event, end_event, args)
     else:
         # Send the biggest message size our GPUs can fit. If you're facing OOM errors, reduce the mem_factor
         # Don't need output tensor, so we double mem_factor
@@ -106,7 +114,14 @@ def run_all_reduce(local_rank, args):
             else:
                 raise e
         sync_all()
-        timed_all_reduce(input, start_event, end_event, args)
+        if args.validate:
+            ok = validate_allreduce(input.clone(), args)
+            size = input.element_size() * input.nelement()
+            if not args.raw:
+                size = convert_size(size)
+            print_rank_0(f"{size:<20} {'validation':25s} {'PASS' if ok else 'FAIL'}")
+        else:
+            timed_all_reduce(input, start_event, end_event, args)
 
 
 if __name__ == "__main__":
