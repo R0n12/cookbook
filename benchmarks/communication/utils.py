@@ -292,8 +292,8 @@ def validate_allreduce(input, args):
     elif args.dist == 'deepspeed':
         import deepspeed.comm as dist
 
-    sync_all()
     dist.all_reduce(input, async_op=False)
+    sync_all()
     n = dist.get_world_size()
     expected = float(n * (n - 1) / 2)
     return torch.allclose(input, torch.full_like(input, expected))
